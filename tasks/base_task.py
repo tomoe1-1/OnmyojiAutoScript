@@ -22,6 +22,7 @@ from module.image.rpc import get_image_client
 from module.logger import logger
 from module.ocr.base_ocr import OcrMode
 from tasks.Component.Costume.costume_base import CostumeBase
+from tasks.Component.claim_gift import claim_gift_popup
 from tasks.Component.config_base import Time
 from tasks.GlobalGame.assets import GlobalGameAssets
 from tasks.GlobalGame.config_emergency import FriendInvitation
@@ -126,6 +127,8 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         self.device.screenshot()
         # 判断勾协
         self._burst()
+        # Claim the modal before navigation, OCR or battle actions use this frame.
+        claim_gift_popup(self)
 
         # # 判断网络异常
         # if self.appear(self.I_NETWORK_ABNORMAL):
