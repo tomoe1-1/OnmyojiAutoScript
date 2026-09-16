@@ -133,7 +133,7 @@ class Window(Handle):
         logger.info(f"Mumu emulator head height: {height}")
         return height
 
-    def click_window_message(self, x: int, y: int, fast: bool = False):
+    def click_window_message(self, x: int, y: int, fast: bool = False, duration: float = None):
         """
 
         :param x:
@@ -147,7 +147,9 @@ class Window(Handle):
 
         x = int(x / self.window_scale_rate)
         y = int(y / self.window_scale_rate)
-        if fast:
+        if duration is not None:
+            press_time = duration
+        elif fast:
             press_time: float = (random.randint(10, 40)) / 1000.0
         else:
             press_time: float = (random.randint(100, 200)) / 1000.0
@@ -158,20 +160,43 @@ class Window(Handle):
             # SendMessage(self.control_handle_list[0], WM_LBUTTONDOWN, 0, MAKELONG(x, y+self.mumu_head_height))  # 模拟鼠标按下 先是父窗口 上面的框高度是57
             # mumu12模拟器 V3.5.16 之后后可以用下面的方式
             SendMessage(self.control_handle_list[1], WM_LBUTTONDOWN, 0, MAKELONG(x, y))
-            time.sleep(press_time)
-            SendMessage(self.control_handle_list[1], WM_LBUTTONUP, 0, MAKELONG(x, y))  # 模拟鼠标弹起 后是子窗口
+            try:
+                time.sleep(press_time)
+            finally:
+                SendMessage(self.control_handle_list[1], WM_LBUTTONUP, 0, MAKELONG(x, y))  # 模拟鼠标弹起 后是子窗口
         elif emulator_type > 2:  # 夜神模拟器
             SendMessage(self.control_handle_list[0], WM_LBUTTONDOWN, 0, MAKELONG(x, y))  # 模拟鼠标按下 先是父窗口 上面的框高度是57
             SendMessage(self.control_handle_list[1], WM_LBUTTONDOWN, 0, MAKELONG(x, y))
             SendMessage(self.control_handle_list[2], WM_LBUTTONDOWN, 0, MAKELONG(x, y))
             SendMessage(self.control_handle_list[3], WM_LBUTTONDOWN, 0, MAKELONG(x, y))
-            time.sleep(press_time)
-            SendMessage(self.control_handle_list[3], WM_LBUTTONUP, 0, MAKELONG(x, y))  # 模拟鼠标弹起 后是子窗口
+            try:
+                time.sleep(press_time)
+            finally:
+                SendMessage(self.control_handle_list[3], WM_LBUTTONUP, 0, MAKELONG(x, y))  # 模拟鼠标弹起 后是子窗口
         elif emulator_type == 1:  # 雷电模拟器
             clickPos = MAKELONG(x, y)
             SendMessage(self.control_handle_list[0], WM_LBUTTONDOWN, 0, clickPos)
-            time.sleep(press_time)
-            SendMessage(self.control_handle_list[0], WM_LBUTTONUP, 0, clickPos)
+            try:
+                time.sleep(press_time)
+            finally:
+                SendMessage(self.control_handle_list[0], WM_LBUTTONUP, 0, clickPos)
+
+    def hover_window_message(self, path):
+        """Deliver a hover-only path before a click without creating a swipe."""
+        emulator_type = len(self.control_handle_list)
+        if emulator_type == 2:
+            handle = self.control_handle_list[1]
+        elif emulator_type > 2:
+            handle = self.control_handle_list[3]
+        elif emulator_type == 1:
+            handle = self.control_handle_list[0]
+        else:
+            return
+        for (x, y), delay in path:
+            x = int(x / self.window_scale_rate)
+            y = int(y / self.window_scale_rate)
+            SendMessage(handle, WM_MOUSEMOVE, 0, MAKELONG(x, y))
+            time.sleep(delay)
 
     def long_click_window_message(self, x: int, y: int, duration: float):
         """
@@ -370,5 +395,3 @@ if __name__ == "__main__":
     # PostMessage(handle, WM_MOUSEWHEEL, wparam, lparam)
 
     w.long_click_window_message(142, 310, 1.5)
-
-

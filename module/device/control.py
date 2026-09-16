@@ -11,10 +11,24 @@ from module.device.method.minitouch import Minitouch
 from module.device.method.adb import Adb
 from module.device.method.scrcpy import Scrcpy
 from module.device.method.windows import Window
+from module.device.human_click import Session, plan_move, sample_dwell, sampled_width, task_generation
 from module.logger import logger
 
 
 class Control(Minitouch, Adb, Scrcpy, Window):
+    _human_click_session = None
+    _human_click_last_point = None
+    _human_click_generation = None
+
+    @property
+    def human_click_session(self):
+        generation = task_generation()
+        if self._human_click_session is None or self._human_click_generation != generation:
+            self._human_click_session = Session()
+            self._human_click_generation = generation
+            self._human_click_last_point = None
+        return self._human_click_session
+
     def handle_control_check(self, button):
         # Will be overridden in Device
         pass
@@ -34,6 +48,7 @@ class Control(Minitouch, Adb, Scrcpy, Window):
             'ADB': self.click_adb,
             'uiautomator2': self.click_uiautomator2,
             'minitouch': self.click_minitouch,
+            'scrcpy': self.click_scrcpy,
             # 'Hermit': self.click_hermit,
             # 'MaaTouch': self.click_maatouch,
         }
@@ -68,14 +83,36 @@ class Control(Minitouch, Adb, Scrcpy, Window):
             self.handle_control_check(control_name)
         x, y = ensure_int(x, y)
         self._invalidate_image_batch_cache()
-        method = self.click_methods.get(
-            self.config.script.device.control_method,
-            self.click_adb
-        )
+        session = self.human_click_session
+        session.before_click()
+        width = sampled_width((x, y))
         start = time.perf_counter()
-        method(x, y)
+        # Only window-message has a genuine hover channel.  Touch backends
+        # would have to press before moving, turning this into a swipe.
+        if self.config.script.device.control_method == 'window_message':
+            start_point = self._human_click_last_point or (x, y)
+            path = plan_move(start_point, (x, y), width=width, rng=session.rng)
+            self.hover_window_message(path)
+        dwell = sample_dwell(rng=session.rng)
+        if self.config.script.device.control_method == 'window_message':
+            # Keep the ordinary-click handle routing, which differs from long-click.
+            self.click_window_message(x, y, duration=dwell)
+        else:
+            # A stationary down/up sequence permits dwell without dragging.
+            method = self.long_click_methods.get(
+                self.config.script.device.control_method, self.long_click_adb)
+            method(x, y, dwell)
         elapsed = time.perf_counter() - start
+        self._human_click_last_point = (x, y)
         logger.info(f'{self._format_action_duration(elapsed)}Click {point2str(x, y)} @ {control_name}')
+        rest = session.after_click()
+        if rest is not None:
+            logger.info(f'Human click session rest: {rest:.2f}s')
+            self.sleep(rest)
+            # Deliberate inactivity must not be mistaken for a stuck game.
+            clear_stuck = getattr(self, 'stuck_record_clear', None)
+            if callable(clear_stuck):
+                clear_stuck()
 
 
     def multi_click(self, button, n, interval=(0.1, 0.2)):
