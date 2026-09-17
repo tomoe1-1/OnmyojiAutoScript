@@ -82,7 +82,8 @@ class Script:
             logger.info(
                 'Low spec mode enabled: frame cache=10s, '
                 'OCR model=medium, OCR timeout=30s, OCR cache=2s, '
-                'image threshold unchanged'
+                'image threshold unchanged; idle timeout=180s, login budget=900s, '
+                'screenshot interval>=0.8s, combat>=1.5s, control interval>=1.2s'
             )
 
     @cached_property

@@ -172,7 +172,8 @@ class PlatformWindows(PlatformBase, EmulatorManager):
         return subprocess.Popen(
             command,
             close_fds=True,
-            startupinfo=startupinfo
+            startupinfo=startupinfo,
+            creationflags=0 if show_window else subprocess.CREATE_NO_WINDOW,
         )
 
     @classmethod
@@ -193,6 +194,7 @@ class PlatformWindows(PlatformBase, EmulatorManager):
             errors='replace' if encoding else None,
             timeout=timeout,
             startupinfo=startupinfo,
+            creationflags=0 if show_window else subprocess.CREATE_NO_WINDOW,
             close_fds=True,
         )
 
@@ -628,7 +630,7 @@ class PlatformWindows(PlatformBase, EmulatorManager):
         cmd = handler.build_stop_command(instance)
         if cmd is None:
             raise EmulatorUnknown(f'Handler returned no stop command for: {instance}')
-        self.execute(cmd)
+        self.execute(cmd, show_window=False)
         return self._wait_emulator_stop(instance, handler)
 
     def _emulator_function_wrapper(self, func: callable, instance: EmulatorInstance = None):

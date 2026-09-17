@@ -46,6 +46,7 @@ class Updater(DeployConfig, GitManager, PipManager):
                 errors="replace",
                 shell=True,
                 timeout=timeout,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
             )
         except subprocess.TimeoutExpired:
             logger.warning(f"Git command timeout after {timeout}s: {command}")

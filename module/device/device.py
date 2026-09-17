@@ -1,5 +1,7 @@
 
 from collections import deque
+from contextlib import contextmanager
+from module.device.performance import PerformanceProfile
 from datetime import datetime
 import time
 
@@ -25,6 +27,9 @@ from module.logger import logger
 
 
 class Device(Platform, Screenshot, Control, AppControl):
+    performance = PerformanceProfile()
+    _login_deadline = None
+    _last_control_time = None
     _screen_size_checked = False
     detect_record = set()
     click_record = deque(maxlen=15)
@@ -55,6 +60,14 @@ class Device(Platform, Screenshot, Control, AppControl):
         if IS_WINDOWS and self.config.script.device.emulatorinfo_type == 'auto':
             _ = self.emulator_instance
 
+        self.performance = PerformanceProfile(bool(self.config.script.device.low_spec_mode))
+        self.detect_record = set()
+        self.click_record = deque(maxlen=45 if self.performance.low_spec else 15)
+        self.stuck_timer = Timer(self.performance.timeout(60), count=60).start()
+        self.stuck_timer_long = Timer(self.performance.timeout(300), count=300).start()
+        self._login_deadline = None
+        self._last_control_time = None
+        self._screenshot_interval = Timer(0.1)
         self.screenshot_interval_set()
         self._image_batch_cache_frame_id: str | None = None
         self._image_batch_cache: dict[int, dict] = {}
@@ -162,8 +175,28 @@ class Device(Platform, Screenshot, Control, AppControl):
         self.detect_record.add(str(button))
         logger.info(f'Add stuck record: {button}')
 
+    @contextmanager
+    def login_wait(self):
+        """Keep slow-login protection across clicks, with a finite total budget."""
+        if not self.performance.low_spec:
+            yield
+            return
+        previous = self._login_deadline
+        self._login_deadline = previous or (time.monotonic() + self.performance.timeout(300))
+        self.stuck_record_clear()
+        try:
+            yield
+        finally:
+            self._login_deadline = previous
+            self.stuck_record_clear()
+            self.click_record_clear()
+
+    def _check_login_deadline(self):
+        if self._login_deadline is not None and time.monotonic() >= self._login_deadline:
+            raise GameStuckError('Low spec login exceeded 900 seconds')
+
     def stuck_record_clear(self):
-        self.detect_record = set()
+        self.detect_record = {'LOGIN_CHECK'} if self._login_deadline is not None else set()
         self.stuck_timer.reset()
         self.stuck_timer_long.reset()
 
@@ -172,6 +205,7 @@ class Device(Platform, Screenshot, Control, AppControl):
         Raises:
             GameStuckError:
         """
+        self._check_login_deadline()
         reached = self.stuck_timer.reached()
         reached_long = self.stuck_timer_long.reached()
 
@@ -192,6 +226,12 @@ class Device(Platform, Screenshot, Control, AppControl):
             raise GameNotRunningError('Game died')
 
     def handle_control_check(self, button):
+        if self.performance.click_interval and self._last_control_time is not None:
+            remaining = self.performance.click_interval - (time.monotonic() - self._last_control_time)
+            if remaining > 0:
+                time.sleep(remaining)
+        self._check_login_deadline()
+        self._last_control_time = time.monotonic()
         self.stuck_record_clear()
         self.click_record_add(button)
         self.click_record_check()
@@ -228,16 +268,23 @@ class Device(Platform, Screenshot, Control, AppControl):
         Raises:
             GameTooManyClickError:
         """
+        # Login animations may need repeated skip clicks. The absolute login
+        # deadline remains active even when every click resets the idle timers.
+        if self._login_deadline is not None:
+            self._check_login_deadline()
+            return
+        if not self.click_record:
+            return
         count = {}
         for key in self.click_record:
             count[key] = count.get(key, 0) + 1
         count = sorted(count.items(), key=lambda item: item[1], reverse=True)
-        if count[0][1] >= 10:
+        if count[0][1] >= self.performance.click_limit:
             logger.warning(f'Too many click for a button: {count[0][0]}')
             logger.warning(f'History click: {[str(prev) for prev in self.click_record]}')
             self.click_record_clear()
             raise GameTooManyClickError(f'Too many click for a button: {count[0][0]}')
-        if len(count) >= 2 and count[0][1] >= 6 and count[1][1] >= 6:
+        if len(count) >= 2 and count[0][1] >= self.performance.alternating_click_limit and count[1][1] >= self.performance.alternating_click_limit:
             logger.warning(f'Too many click between 2 buttons: {count[0][0]}, {count[1][0]}')
             logger.warning(f'History click: {[str(prev) for prev in self.click_record]}')
             self.click_record_clear()
@@ -283,13 +330,13 @@ class Device(Platform, Screenshot, Control, AppControl):
             timeout: 最大等待秒数。
             interval: 每轮探测的间隔秒数。
         """
-        deadline = time.time() + timeout
+        deadline = time.monotonic() + self.performance.timeout(timeout)
         screenshot_method = self.screenshot_methods.get(
             self.config.script.device.screenshot_method,
             self.screenshot_adb
         )
 
-        while time.time() < deadline:
+        while time.monotonic() < deadline:
             if not self.app_is_running():
                 time.sleep(interval)
                 continue

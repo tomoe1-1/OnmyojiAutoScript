@@ -248,7 +248,8 @@ class EmulatorConnect:
         if not output:
             cmd.extend(['>nul', '2>nul'])
         logger.info(' '.join(cmd))
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True,
+                                   creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         try:
             stdout, stderr = process.communicate(timeout=timeout)
             ret_code = process.returncode
@@ -344,7 +345,8 @@ class EmulatorConnect:
 
         async def connect():
             await asyncio.gather(
-                *[asyncio.create_subprocess_exec(self.adb_binary, 'connect', serial) for serial in self.serial]
+                *[asyncio.create_subprocess_exec(self.adb_binary, 'connect', serial,
+                                                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)) for serial in self.serial]
             )
 
         asyncio.run(connect())

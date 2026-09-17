@@ -323,11 +323,11 @@ window_background >>> DroidCast_raw >  ADB_nc >> DroidCast > uiautomator2 ~= ADB
     </message>
 	<message>
         <source>Low Spec Mode</source>
-        <translation>低配模式</translation>
+        <translation>低端机模式</translation>
     </message>
 	<message>
         <source>low_spec_mode_help</source>
-        <translation>默认关闭。开启后截图帧保留 10 秒，OCR 改用小模型，并将图像对比阈值统一降低 0.1。修改后需停止当前运行的脚本，再重新启动脚本生效。</translation>
+        <translation>默认关闭。开启后普通卡死等待延长至 180 秒，战斗等长等待及登录上限为 900 秒；通用界面等待延长为 3 倍，启动黑屏探测延长至 45 秒。截图至少间隔 0.8 秒（战斗 1.5 秒），操作至少间隔 1.2 秒。保留中型 OCR 模型和原识别阈值。修改后停止并重新启动脚本生效。</translation>
     </message>
 	<message>
         <source>Resource Precache Enable</source>

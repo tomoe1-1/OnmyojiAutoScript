@@ -73,8 +73,14 @@ class Device(BaseModel):
     emulator_window_minimize: bool = Field(default=False, description='模拟器静默启动并最小化')
     # 启动时纯后台运行模拟器，不显示窗口和任务栏
     run_background_only: bool = Field(default=False, description='模拟器无UI后台运行，关掉后重启脚本会重新显示（无需重启OAS）')
-    # 低配置设备延长截图帧缓存与OCR超时，并复用短期OCR结果；只在脚本进程启动时读取
-    low_spec_mode: bool = Field(default=False, description='low_spec_mode_help')
+    # 低端机适配：延长登录/响应等待、降低截图及点击频率；重启脚本生效
+    low_spec_mode: bool = Field(
+        default=False,
+        title='低端机模式',
+        description='默认关闭。开启后普通卡死等待为180秒，登录最多等待900秒，'
+                    '通用界面等待延长为3倍；截图至少间隔0.8秒（战斗1.5秒），'
+                    '操作至少间隔1.2秒。保留原OCR模型和识别阈值。停止并重新启动脚本生效。',
+    )
     # 位于低配模式下方，但功能独立，不依赖低配模式开关
     continuous_task_rest_enable: bool = Field(
         default=False,

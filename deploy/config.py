@@ -1,6 +1,7 @@
 # This Python file uses the following encoding: utf-8
 # copy from alas https://github.com/LmeSzinc/AzurLaneAutoScript
 import copy
+import subprocess
 from typing import Optional, Union
 
 from deploy.logger import logger
@@ -156,7 +157,10 @@ class DeployConfig(ConfigModel):
         if not output:
             command = command + ' >nul 2>nul'
         logger.info(command)
-        error_code = os.system(command)
+        error_code = subprocess.run(
+            command, shell=True,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+        ).returncode
         if error_code:
             if allow_failure:
                 logger.info(f"[ allowed failure ], error_code: {error_code}")

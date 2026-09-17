@@ -154,7 +154,8 @@ class LoginService(
         self.device.stuck_record_clear()
         self.device.click_record_clear()
         try:
-            self._app_handle_login()
+            with self.device.login_wait():
+                self._app_handle_login()
             return True
         except (GameTooManyClickError, GameStuckError) as e:
             logger.warning(e)

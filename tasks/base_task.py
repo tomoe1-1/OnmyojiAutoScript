@@ -281,20 +281,20 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         """
         wait_timer = None
         if wait_time:
-            wait_timer = Timer(wait_time)
+            wait_timer = Timer(self.device.performance.timeout(wait_time))
             wait_timer.start()
         while 1:
             if skip_first_screenshot:
                 skip_first_screenshot = False
             else:
                 self.screenshot()
-            if wait_timer and wait_timer.reached():
-                logger.warning(f"Wait until appear {target.name} timeout")
-                return False
             if isinstance(target, RuleImage) and self.appear(target):
                 return True
             if isinstance(target, RuleOcr) and self.ocr_appear(target):
                 return True
+            if wait_timer and wait_timer.reached():
+                logger.warning(f"Wait until appear {target.name} timeout")
+                return False
 
     def wait_until_appear_then_click(self,
                                      target: RuleImage,
@@ -307,7 +307,7 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         :param target:
         :return:
         """
-        if not self.wait_until_appear(target, wait_time):
+        if not self.wait_until_appear(target, wait_time=wait_time):
             return False
         click_x, click_y = target.coord()
         if action is None:
@@ -336,7 +336,7 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         :return: timer时间内稳定出现则返回True, 否则False
         """
         logger.info(f'Wait until {target.name} position stable')
-        timeout_timer = Timer(timeout).start()
+        timeout_timer = Timer(self.device.performance.timeout(timeout)).start()
         stable_timer = Timer(stable_time).start()
         pre_roi_front, cur_roi_front = None, None
         origin_roi_back = target.roi_back
@@ -381,6 +381,9 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         :return:
         """
         target._match_init = False
+        # Use local timers so repeated low-spec calls cannot compound budgets.
+        timer = Timer(timer.limit, count=timer.count)
+        timeout = Timer(self.device.performance.timeout(timeout.limit), count=timeout.count)
         timeout.reset()
         while 1:
             if skip_first_screenshot:
@@ -413,7 +416,7 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         """
         if not isinstance(rule, RuleAnimate):
             rule = RuleAnimate(rule)
-        timeout_timer = Timer(timeout).start() if timeout is not None else None
+        timeout_timer = Timer(self.device.performance.timeout(timeout)).start() if timeout is not None else None
         while 1:
             self.screenshot()
 
@@ -784,7 +787,7 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         :param timeout: 总的超时时间（秒）。默认为10秒。
         :return: 如果在超时时间内找到目标元素，则返回True，否则返回False。
         """
-        timeout_timer = Timer(timeout).start()
+        timeout_timer = Timer(self.device.performance.timeout(timeout)).start()
         while not timeout_timer.reached():
             self.screenshot()
             if self.appear(stop):

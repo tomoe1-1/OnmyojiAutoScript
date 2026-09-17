@@ -131,12 +131,11 @@ class Connection(ConnectionAttr):
         cmd = [self.adb_binary, '-s', self.serial] + cmd
         logger.info(f'Execute: {cmd}')
 
-        # Use shell=True to disable console window when using GUI.
-        # Although, there's still a window when you stop running in GUI, which cause by gooey.
-        # To disable it, edit gooey/gui/util/taskkill.py
-
-        # No gooey anymore, just shell=False
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=False)
+        # Suppress console allocation for ADB launched by GUI/background workers.
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, shell=False,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+        )
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
