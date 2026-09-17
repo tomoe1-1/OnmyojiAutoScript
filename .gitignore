@@ -275,3 +275,6 @@ console.bat
 .vscode/*
 tasks/AutoCheckinBigGod/frida-server-17.6.2-android-x86_64
 oas.bat
+
+# OAS 操作记录器随源码一起分发，保留打包好的 EXE
+!OASInputRecorder/OASInputRecorder.exe
