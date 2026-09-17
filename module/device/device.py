@@ -62,9 +62,9 @@ class Device(Platform, Screenshot, Control, AppControl):
 
         self.performance = PerformanceProfile(bool(self.config.script.device.low_spec_mode))
         self.detect_record = set()
-        self.click_record = deque(maxlen=45 if self.performance.low_spec else 15)
+        self.click_record = deque(maxlen=15)
         self.stuck_timer = Timer(self.performance.timeout(60), count=60).start()
-        self.stuck_timer_long = Timer(self.performance.timeout(300), count=300).start()
+        self.stuck_timer_long = Timer(300, count=300).start()
         self._login_deadline = None
         self._last_control_time = None
         self._screenshot_interval = Timer(0.1)
@@ -206,6 +206,9 @@ class Device(Platform, Screenshot, Control, AppControl):
             GameStuckError:
         """
         self._check_login_deadline()
+        # Login has its own total deadline; battle/other long waits stay at 300s.
+        if self._login_deadline is not None:
+            return False
         reached = self.stuck_timer.reached()
         reached_long = self.stuck_timer_long.reached()
 
@@ -268,11 +271,7 @@ class Device(Platform, Screenshot, Control, AppControl):
         Raises:
             GameTooManyClickError:
         """
-        # Login animations may need repeated skip clicks. The absolute login
-        # deadline remains active even when every click resets the idle timers.
-        if self._login_deadline is not None:
-            self._check_login_deadline()
-            return
+        self._check_login_deadline()
         if not self.click_record:
             return
         count = {}

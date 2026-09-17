@@ -71,6 +71,33 @@ class LowSpecTests(unittest.TestCase):
                 with self.assertRaises(GameStuckError):
                     d.stuck_record_check()
 
+    def test_long_wait_stays_at_300_seconds_in_both_modes(self):
+        for low in (False, True):
+            d = device(low)
+            self.assertEqual(d.stuck_timer_long.limit, 300)
+            with patch('time.time', return_value=1000):
+                d.stuck_record_clear()
+            d.stuck_record_add('BATTLE_STATUS_S')
+            d.stuck_timer._reach_count = 1000
+            d.stuck_timer_long._reach_count = 1000
+            with patch('time.time', return_value=1299):
+                self.assertFalse(d.stuck_record_check())
+            with patch('time.time', return_value=1301):
+                with self.assertRaises(GameStuckError):
+                    d.stuck_record_check()
+
+    def test_login_can_wait_past_battle_budget(self):
+        d = device(True)
+        with patch('time.monotonic', return_value=100), patch('time.time', return_value=1000):
+            with d.login_wait():
+                d.stuck_timer._reach_count = 1000
+                d.stuck_timer_long._reach_count = 1000
+                with patch('time.time', return_value=1400), patch('time.monotonic', return_value=500):
+                    self.assertFalse(d.stuck_record_check())
+                with patch('time.monotonic', return_value=1000):
+                    with self.assertRaises(GameStuckError):
+                        d.stuck_record_check()
+
     def test_device_state_is_independent(self):
         a, b = device(True), device(False)
         a.click_record_add('A')
@@ -85,7 +112,9 @@ class LowSpecTests(unittest.TestCase):
         with patch('time.monotonic', return_value=100), patch('time.sleep'):
             with d.login_wait():
                 deadline = d._login_deadline
-                for _ in range(50):
+                for _ in range(9):
+                    d.handle_control_check('Skip animation')
+                with self.assertRaises(GameTooManyClickError):
                     d.handle_control_check('Skip animation')
                 self.assertIn('LOGIN_CHECK', d.detect_record)
                 self.assertEqual(d._login_deadline, deadline)
@@ -107,7 +136,7 @@ class LowSpecTests(unittest.TestCase):
         self.assertFalse(d.detect_record)
 
     def test_repeat_click_protection_stays_enabled(self):
-        for low, limit in [(False, 10), (True, 30)]:
+        for low, limit in [(False, 10), (True, 10)]:
             d = device(low)
             for _ in range(limit - 1):
                 d.click_record_add('A')
@@ -118,7 +147,7 @@ class LowSpecTests(unittest.TestCase):
 
     def test_alternating_click_protection(self):
         d = device(True)
-        for _ in range(17):
+        for _ in range(5):
             d.click_record_add('A')
             d.click_record_add('B')
         d.click_record_check()

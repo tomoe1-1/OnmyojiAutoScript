@@ -18,8 +18,8 @@ class PerformanceProfile:
 
     @property
     def click_limit(self):
-        return 30 if self.low_spec else 10
+        return 10
 
     @property
     def alternating_click_limit(self):
-        return 18 if self.low_spec else 6
+        return 6

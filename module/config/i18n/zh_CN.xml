@@ -327,7 +327,7 @@ window_background >>> DroidCast_raw >  ADB_nc >> DroidCast > uiautomator2 ~= ADB
     </message>
 	<message>
         <source>low_spec_mode_help</source>
-        <translation>默认关闭。开启后普通卡死等待延长至 180 秒，战斗等长等待及登录上限为 900 秒；通用界面等待延长为 3 倍，启动黑屏探测延长至 45 秒。截图至少间隔 0.8 秒（战斗 1.5 秒），操作至少间隔 1.2 秒。保留中型 OCR 模型和原识别阈值。修改后停止并重新启动脚本生效。</translation>
+        <translation>默认关闭。开启后普通卡死等待延长至 180 秒，战斗等长等待保持 300 秒，登录独立上限为 900 秒；通用界面等待延长为 3 倍，启动黑屏探测延长至 45 秒。截图至少间隔 0.8 秒（战斗 1.5 秒），操作至少间隔 1.2 秒。保留中型 OCR 模型和原识别阈值。修改后停止并重新启动脚本生效。</translation>
     </message>
 	<message>
         <source>Resource Precache Enable</source>
