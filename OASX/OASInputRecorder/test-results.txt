@@ -1,0 +1,11 @@
+﻿PASS click/time/duration/profile
+PASS swipe endpoints
+PASS reject task intent/API duplicate
+PASS malformed input
+PASS CSV escaping
+PASS tail/partial/no duplicate
+PASS truncation
+PASS split UTF8
+PASS canvas rendering
+PASS existing OAS log: 3374 actions, 12 swipes/drags
+PASS full window construction/render

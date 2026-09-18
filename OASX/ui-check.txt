@@ -1,0 +1,6 @@
+AzurTian/OASX UI package check
+Storage: OK
+Window plugin: oasx
+Original CSV assets: 3
+Tools page first frame: OK
+PASS
