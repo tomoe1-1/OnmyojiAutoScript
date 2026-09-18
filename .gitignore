@@ -278,9 +278,3 @@ oas.bat
 
 # OAS 操作记录器随源码一起分发，保留打包好的 EXE
 !OASInputRecorder/OASInputRecorder.exe
-
-# OASX 桌面端为 Flutter 发布产物，运行所需文件必须入库（目录内被 *.exe / *.so / lib/ 忽略的项用 git add -f 纳入）
-!OASX/oasx.exe
-!OASX/OASInputRecorder/OASInputRecorder.exe
-!OASX/data/*.so
-!OASX/data/flutter_assets/packages/font_awesome_flutter/lib/
