@@ -278,3 +278,6 @@ oas.bat
 
 # OASX 桌面控制端已拆分为独立仓库（tomoe1-1/OASX），不随 OAS 源码分发
 OASX/
+
+# Local recovery experience (never sync account/device history)
+config/error_learning.sqlite3*

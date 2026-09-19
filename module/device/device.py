@@ -68,6 +68,7 @@ class Device(Platform, Screenshot, Control, AppControl):
         self.stuck_timer_long = Timer(300, count=300).start()
         self._login_deadline = None
         self._last_control_time = None
+        self._error_learning = None
         self.reset_task_recovery()
         self._screenshot_interval = Timer(0.1)
         self.screenshot_interval_set()
@@ -213,6 +214,17 @@ class Device(Platform, Screenshot, Control, AppControl):
             raise GameNotRunningError('Game died')
         if self._escape_attempts >= 3:
             raise TaskRecoveryFailed(f'ESC recovery failed after 3 attempts: {reason}')
+        learning = getattr(self, '_error_learning', None)
+        if learning is not None:
+            try:
+                # Sets have unstable repr order; use a stable wait signature.
+                learning_reason = ('wait:' + ','.join(sorted(self.detect_record))) if reason.startswith('Wait too long:') else reason
+                plan = learning.begin(learning_reason, getattr(self, 'image', None))
+                if plan:
+                    logger.info(f'Learned recovery: {plan["action"]}, verify page={plan["page"]}, settle={plan["settle"]:.1f}s')
+            except Exception as exc:
+                logger.warning(f'Error learning disabled for this task: {exc}')
+                self._error_learning = None
         self._escape_attempts += 1
         logger.warning(f'ESC recovery {self._escape_attempts}/3: {reason}')
         try:

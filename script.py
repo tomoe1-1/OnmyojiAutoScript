@@ -544,6 +544,14 @@ class Script:
         set_ocr_logging_enabled(self.config.global_game.ocr.save_ocr_log)
         try:
             self.device.reset_task_recovery()
+            logger.info('Recovery policy: Android BACK v2; maximum 3 attempts; page verification required')
+            self.config._learning_task_outcomes = {}
+            self.device._error_learning = None
+            try:
+                from module.device.error_learning import create_session
+                self.device._error_learning = create_session(self.config, command, logger.warning, self.device)
+            except Exception as exc:
+                logger.warning(f'Error learning unavailable; original behavior retained: {exc}')
             self.device.screenshot()
             module_name = 'script_task'
             module_path = str(Path.cwd() / 'tasks' / command / (module_name + '.py'))
@@ -551,8 +559,26 @@ class Script:
             task_module = load_module(module_name, module_path)
             task_module.ScriptTask(config=self.config, device=self.device).run()
         except Exception as e:
-            return self._handle_task_exception(e, command)
+            if not isinstance(e, TaskEnd):
+                self._finish_error_learning(False, error=e)
+            result = self._handle_task_exception(e, command)
+            if isinstance(e, TaskEnd):
+                outcome = self.last_task_runtime_outcome or {}
+                declared_success = self.config._learning_task_outcomes.get(convert_to_underscore(command))
+                verified = declared_success is True or outcome.get('status') in ('success', 'recovered')
+                self._finish_error_learning(result and verified and declared_success is not False
+                                            and outcome.get('status') in (None, 'success', 'recovered'))
+            return result
+        self._finish_error_learning(False)
         return False
+
+    def _finish_error_learning(self, success, error=None):
+        learning = getattr(self.device, '_error_learning', None)
+        if learning is not None:
+            try:
+                learning.finish(success, error=error)
+            except Exception as exc:
+                logger.warning(f'Unable to save error experience; task outcome unchanged: {exc}')
 
     def loop(self):
         """

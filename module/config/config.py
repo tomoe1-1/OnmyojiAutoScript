@@ -381,6 +381,11 @@ class Config(ConfigState, ConfigManual, ConfigWatcher, ConfigMenu):
             self.lock_config.release()
         # 设置
         logger.attr(f'{task}.scheduler.next_run', next_run)
+        # Runtime-only evidence; never serialize this into user configuration.
+        outcomes = getattr(self, '_learning_task_outcomes', None)
+        if outcomes is not None and success is not None:
+            outcomes[task] = bool(success) and outcomes.get(task) is not False
+
 
 
 if __name__ == '__main__':

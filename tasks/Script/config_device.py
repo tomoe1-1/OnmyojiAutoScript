@@ -82,6 +82,13 @@ class Device(BaseModel):
                     '操作至少间隔1.2秒。保留原OCR模型和识别阈值。停止并重新启动脚本生效。',
     )
     # 位于低配模式下方，但功能独立，不依赖低配模式开关
+    error_learning_enabled: bool = Field(
+        default=True,
+        title='本地错误经验学习',
+        description='记录界面异常及恢复结果。相同任务、设备和相似画面至少两次恢复后任务明确成功，'
+                    '才优先复用等待时间和页面识别顺序；失败后停用该经验。仅本机保存，不自动修改代码，'
+                    '不改变点击10次、战斗等待300秒及最多3次ESC限制。下次任务生效。',
+    )
     continuous_task_rest_enable: bool = Field(
         default=False,
         description='continuous_task_rest_enable_help',

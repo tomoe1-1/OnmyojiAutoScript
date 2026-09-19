@@ -34,11 +34,17 @@ class Control(Minitouch, Adb, Scrcpy, Window):
         pass
 
     def press_escape(self):
-        """Send one ESC to the configured device, never the desktop focus."""
-        if IS_WINDOWS and self.config.script.device.control_method == 'window_message':
-            self.press_escape_window_message()
-        else:
-            self.adb_shell(['input', 'keyevent', 'KEYCODE_ESCAPE'])
+        """Request Android back on the selected emulator (the ESC recovery action).
+
+        An Android ESC key is not the back action, and posting a Windows key
+        message does not guarantee delivery to the emulator's Android guest.
+        Keep exactly one device-scoped input per recovery attempt for every
+        click backend, including window_message.
+        """
+        result = self.adb_shell(['input', 'keyevent', 'KEYCODE_BACK'])
+        if result and str(result).strip():
+            raise RuntimeError(f'Android back input returned an error: {result}')
+        logger.info('ESC recovery: Android BACK dispatched to configured device; awaiting page verification')
 
     @staticmethod
     def _format_action_duration(duration_seconds: float) -> str:

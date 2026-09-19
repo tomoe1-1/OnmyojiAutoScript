@@ -76,15 +76,39 @@ class EscapeRecoveryTests(unittest.TestCase):
         d.swipe_adb.assert_not_called()
 
     def test_escape_backend_routes_to_device(self):
-        d = control('window_message')
-        d.press_escape_window_message = Mock()
-        d.adb_shell = Mock()
-        d.press_escape()
-        d.press_escape_window_message.assert_called_once()
-        d.adb_shell.assert_not_called()
-        d.config.script.device.control_method = 'minitouch'
-        d.press_escape()
-        d.adb_shell.assert_called_once_with(['input', 'keyevent', 'KEYCODE_ESCAPE'])
+        for backend in ('window_message', 'minitouch', 'adb', 'uiautomator2', 'scrcpy'):
+            with self.subTest(backend=backend):
+                d = control(backend)
+                d.press_escape_window_message = Mock()
+                d.adb_shell = Mock(return_value='')
+                d.press_escape()
+                d.press_escape_window_message.assert_not_called()
+                d.adb_shell.assert_called_once_with(['input', 'keyevent', 'KEYCODE_BACK'])
+
+    def test_escape_input_error_is_not_silently_accepted_or_retried(self):
+        d = control('minitouch')
+        for failure in ('Error: Invalid keycode', RuntimeError('device offline')):
+            d.adb_shell = Mock(return_value=failure if isinstance(failure, str) else '')
+            if isinstance(failure, Exception):
+                d.adb_shell.side_effect = failure
+            with self.assertRaises(RuntimeError):
+                d.press_escape()
+            self.assertEqual(d.adb_shell.call_count, 1)
+
+    def test_timeout_reaches_real_back_transport_and_stops_after_three(self):
+        d = device()
+        transport = control('minitouch')
+        transport.adb_shell = Mock(return_value='')
+        d.press_escape = transport.press_escape
+        d.stuck_timer.reached = Mock(return_value=True)
+        d.stuck_timer_long.reached = Mock(return_value=True)
+        for _ in range(3):
+            d.stuck_record_check()
+        with self.assertRaises(TaskRecoveryFailed):
+            d.stuck_record_check()
+        self.assertEqual(transport.adb_shell.call_count, 3)
+        for call in transport.adb_shell.call_args_list:
+            self.assertEqual(call.args, (['input', 'keyevent', 'KEYCODE_BACK'],))
 
     def test_windows_escape_targets_only_configured_window(self):
         post = Mock()
