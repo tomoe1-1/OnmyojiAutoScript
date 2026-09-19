@@ -304,7 +304,10 @@ class GameUi(ChessBattleNavigationMixin, BaseTask, GameUiAssets):
             动作是否成功执行。
         """
 
+        recovery_generation = self.device._escape_generation
         self.maybe_screenshot(skip_first_screenshot)
+        if recovery_generation != self.device._escape_generation:
+            return False
 
         if isinstance(action, ConditionalAction):
             if not action.condition.evaluate(self):
@@ -640,7 +643,8 @@ class GameUi(ChessBattleNavigationMixin, BaseTask, GameUiAssets):
         logger.warning(f"Last repeated-failure close result: {last_repeated_failure_close_result}")
         logger.warning(f"Edge penalties: {penalties}")
         logger.warning(f"Unknown close history: {self.navigator.unknown_close_history}")
-        raise GamePageUnknownError(f"Cannot goto page[{destination}]")
+        self.device.recover_by_escape(f"Cannot goto page[{destination}]")
+        self.screenshot()
 
     def get_current_page(self, skip_first_screenshot: bool = True, fallback: bool = False) -> Page | None:
         """获取当前稳定页面。
@@ -788,6 +792,7 @@ class GameUi(ChessBattleNavigationMixin, BaseTask, GameUiAssets):
         logger.hr(f"UI goto {destination}")
         start_time = time.time()
         progress_timer = Timer(timeout).start()
+        recovery_generation = self.device._escape_generation
         last_progress_signature: tuple[str, str] | None = None
         last_detected_page_key: str | None = None
         repeated_failure_transition_key: str | None = None
@@ -802,6 +807,12 @@ class GameUi(ChessBattleNavigationMixin, BaseTask, GameUiAssets):
         while True:
             current = self._refresh_current_page(destination, skip_first_screenshot)
             skip_first_screenshot = False
+            if recovery_generation != self.device._escape_generation:
+                recovery_generation = self.device._escape_generation
+                progress_timer.reset()
+                last_progress_signature = None
+                last_detected_page_key = None
+                reset_repeated_transition_failures()
 
             if current is None:
                 if self.close_unknown_pages(skip_first_screenshot=False):
@@ -817,7 +828,11 @@ class GameUi(ChessBattleNavigationMixin, BaseTask, GameUiAssets):
                         repeated_failure_count=repeated_failure_count,
                         last_repeated_failure_close_result=last_repeated_failure_close_result,
                     )
-                    raise GamePageUnknownError(f"Cannot goto page[{destination}]")
+                    progress_timer.reset()
+                    last_detected_page_key = None
+                    last_progress_signature = None
+                    reset_repeated_transition_failures()
+
                 continue
 
             if current.key != last_detected_page_key:
@@ -845,6 +860,10 @@ class GameUi(ChessBattleNavigationMixin, BaseTask, GameUiAssets):
                         repeated_failure_count=repeated_failure_count,
                         last_repeated_failure_close_result=last_repeated_failure_close_result,
                     )
+                    progress_timer.reset()
+                    last_detected_page_key = None
+                    last_progress_signature = None
+                    reset_repeated_transition_failures()
                 continue
 
             path_signature = (current.key, " -> ".join(transition.key for transition in path))
@@ -887,3 +906,7 @@ class GameUi(ChessBattleNavigationMixin, BaseTask, GameUiAssets):
                     repeated_failure_count=repeated_failure_count,
                     last_repeated_failure_close_result=last_repeated_failure_close_result,
                 )
+                progress_timer.reset()
+                last_detected_page_key = None
+                last_progress_signature = None
+                reset_repeated_transition_failures()

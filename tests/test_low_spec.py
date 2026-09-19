@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 from module.base.timer import Timer
 from module.device.performance import PerformanceProfile
-from module.exception import GameStuckError, GameNotRunningError, GameTooManyClickError
+from module.exception import GameStuckError, GameNotRunningError, GameTooManyClickError, TaskRecoveryFailed
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,7 +29,7 @@ def device(low=False):
     ns = dict(deque=deque, Timer=Timer, PerformanceProfile=PerformanceProfile,
               contextmanager=contextmanager, time=time, logger=Mock(), IS_WINDOWS=False,
               GameStuckError=GameStuckError, GameNotRunningError=GameNotRunningError,
-              GameTooManyClickError=GameTooManyClickError)
+              GameTooManyClickError=GameTooManyClickError, TaskRecoveryFailed=TaskRecoveryFailed)
     class Parent:
         def __init__(self, config):
             self.config = config
@@ -43,6 +43,7 @@ def device(low=False):
     exec(compile(ast.Module(body=[cls], type_ignores=[]), 'device.py', 'exec'), ns)
     d = ns['Device'](SimpleNamespace(script=SimpleNamespace(device=SimpleNamespace(
         low_spec_mode=low, screenshot_method='ADB'))))
+    d.press_escape = Mock()
     d.app_is_running = lambda: True
     return d
 
@@ -68,8 +69,8 @@ class LowSpecTests(unittest.TestCase):
             with patch('time.time', return_value=1000 + budget - 1):
                 self.assertFalse(d.stuck_record_check())
             with patch('time.time', return_value=1000 + budget + 1):
-                with self.assertRaises(GameStuckError):
-                    d.stuck_record_check()
+                self.assertFalse(d.stuck_record_check())
+                d.press_escape.assert_called_once()
 
     def test_long_wait_stays_at_300_seconds_in_both_modes(self):
         for low in (False, True):
@@ -83,8 +84,8 @@ class LowSpecTests(unittest.TestCase):
             with patch('time.time', return_value=1299):
                 self.assertFalse(d.stuck_record_check())
             with patch('time.time', return_value=1301):
-                with self.assertRaises(GameStuckError):
-                    d.stuck_record_check()
+                self.assertFalse(d.stuck_record_check())
+                d.press_escape.assert_called_once()
 
     def test_login_can_wait_past_battle_budget(self):
         d = device(True)
@@ -95,8 +96,8 @@ class LowSpecTests(unittest.TestCase):
                 with patch('time.time', return_value=1400), patch('time.monotonic', return_value=500):
                     self.assertFalse(d.stuck_record_check())
                 with patch('time.monotonic', return_value=1000):
-                    with self.assertRaises(GameStuckError):
-                        d.stuck_record_check()
+                    self.assertFalse(d.stuck_record_check())
+                    d.press_escape.assert_called_once()
 
     def test_device_state_is_independent(self):
         a, b = device(True), device(False)
@@ -114,15 +115,13 @@ class LowSpecTests(unittest.TestCase):
                 deadline = d._login_deadline
                 for _ in range(9):
                     d.handle_control_check('Skip animation')
-                with self.assertRaises(GameTooManyClickError):
-                    d.handle_control_check('Skip animation')
+                self.assertFalse(d.handle_control_check('Skip animation'))
                 self.assertIn('LOGIN_CHECK', d.detect_record)
                 self.assertEqual(d._login_deadline, deadline)
                 with patch('time.monotonic', return_value=deadline):
-                    with self.assertRaises(GameStuckError):
-                        d.stuck_record_check()
-                    with self.assertRaises(GameStuckError):
-                        d.handle_control_check('Skip animation')
+                    self.assertFalse(d.stuck_record_check())
+                    d.press_escape.assert_called_once()
+                    self.assertFalse(d.handle_control_check('Skip animation'))
         self.assertIsNone(d._login_deadline)
         self.assertFalse(d.detect_record)
         self.assertFalse(d.click_record)

@@ -23,6 +23,7 @@ from module.logger import logger
 from module.ocr.base_ocr import OcrMode
 from tasks.Component.Costume.costume_base import CostumeBase
 from tasks.Component.claim_gift import claim_gift_popup
+from tasks.Component.escape_recovery import handle_escape_recovery
 from tasks.Component.config_base import Time
 from tasks.GlobalGame.assets import GlobalGameAssets
 from tasks.GlobalGame.config_emergency import FriendInvitation
@@ -125,6 +126,7 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         # nemu_ipc 返回为RGB
         # 其他方式未知
         self.device.screenshot()
+        handle_escape_recovery(self)
         # 判断勾协
         self._burst()
         # Claim the modal before navigation, OCR or battle actions use this frame.
@@ -254,17 +256,21 @@ class BaseTask(GlobalGameAssets, CostumeBase):
         appear = self.appear(target, interval=interval, threshold=threshold)
         if appear and not action:
             x, y = target.coord()
-            self.device.click(x, y, control_name=target.name)
+            if self.device.click(x, y, control_name=target.name) is False:
+                return False
 
         elif appear and action:
             x, y = action.coord()
             if isinstance(action, RuleLongClick):
                 if duration is None:
-                    self.device.long_click(x, y, duration=action.duration / 1000, control_name=target.name)
+                    if self.device.long_click(x, y, duration=action.duration / 1000, control_name=target.name) is False:
+                        return False
                 else:
-                    self.device.long_click(x, y, duration=duration / 1000, control_name=target.name)
+                    if self.device.long_click(x, y, duration=duration / 1000, control_name=target.name) is False:
+                        return False
             elif isinstance(action, RuleClick):
-                self.device.click(x, y, control_name=target.name)
+                if self.device.click(x, y, control_name=target.name) is False:
+                    return False
 
         return appear
 
@@ -311,11 +317,14 @@ class BaseTask(GlobalGameAssets, CostumeBase):
             return False
         click_x, click_y = target.coord()
         if action is None:
-            self.device.click(click_x, click_y, control_name=target.name)
+            if self.device.click(click_x, click_y, control_name=target.name) is False:
+                return False
         elif isinstance(action, RuleLongClick):
-            self.device.long_click(click_x, click_y, duration=action.duration / 1000, control_name=target.name)
+            if self.device.long_click(click_x, click_y, duration=action.duration / 1000, control_name=target.name) is False:
+                return False
         elif isinstance(action, RuleClick):
-            self.device.click(click_x, click_y, control_name=target.name)
+            if self.device.click(click_x, click_y, control_name=target.name) is False:
+                return False
         return True
 
     def wait_until_disappear(self, target: RuleImage) -> None:
@@ -462,7 +471,8 @@ class BaseTask(GlobalGameAssets, CostumeBase):
                 return False
 
         x1, y1, x2, y2 = swipe.coord()
-        self.device.swipe(p1=(x1, y1), p2=(x2, y2), control_name=swipe.name)
+        if self.device.swipe(p1=(x1, y1), p2=(x2, y2), control_name=swipe.name) is False:
+            return False
 
         # 执行后，如果有限制时间，则重置限制时间
         if interval:
@@ -505,9 +515,11 @@ class BaseTask(GlobalGameAssets, CostumeBase):
             # 连点时每次重新取点：保持在同一规则区域内，但不重复同一坐标。
             x, y = click.coord()
             if isinstance(click, RuleLongClick):
-                self.device.long_click(x=x, y=y, duration=click.duration / 1000, control_name=click.name)
+                if self.device.long_click(x=x, y=y, duration=click.duration / 1000, control_name=click.name) is False:
+                    return False
             elif isinstance(click, RuleClick) or isinstance(click, RuleImage) or isinstance(click, RuleOcr):
-                self.device.click(x=x, y=y, control_name=click.name)
+                if self.device.click(x=x, y=y, control_name=click.name) is False:
+                    return False
 
         # 执行后，如果有限制时间，则重置限制时间
         if interval:
@@ -583,7 +595,8 @@ class BaseTask(GlobalGameAssets, CostumeBase):
             self.click(action, interval)
         else:
             x, y = target.coord()
-            self.device.click(x=x, y=y, control_name=target.name)
+            if self.device.click(x=x, y=y, control_name=target.name) is False:
+                return False
         return True
 
     def list_find(self, target: RuleList, name: str | list[str], max_swipe: int = 10) -> bool | tuple:

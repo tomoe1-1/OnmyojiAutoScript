@@ -33,6 +33,13 @@ class Control(Minitouch, Adb, Scrcpy, Window):
         # Will be overridden in Device
         pass
 
+    def press_escape(self):
+        """Send one ESC to the configured device, never the desktop focus."""
+        if IS_WINDOWS and self.config.script.device.control_method == 'window_message':
+            self.press_escape_window_message()
+        else:
+            self.adb_shell(['input', 'keyevent', 'KEYCODE_ESCAPE'])
+
     @staticmethod
     def _format_action_duration(duration_seconds: float) -> str:
         return f'[{duration_seconds:.2f}s] '
@@ -79,8 +86,8 @@ class Control(Minitouch, Adb, Scrcpy, Window):
         :param control_check:
         :return:
         """
-        if control_check:
-            self.handle_control_check(control_name)
+        if control_check and self.handle_control_check(control_name) is False:
+            return False
         x, y = ensure_int(x, y)
         self._invalidate_image_batch_cache()
         session = self.human_click_session
@@ -123,7 +130,8 @@ class Control(Minitouch, Adb, Scrcpy, Window):
         :param interval:
         :return:
         """
-        self.handle_control_check(button)
+        if self.handle_control_check(button) is False:
+            return False
         click_timer = Timer(0.1)
         for _ in range(n):
             remain = ensure_time(interval) - click_timer.current()
@@ -142,7 +150,8 @@ class Control(Minitouch, Adb, Scrcpy, Window):
         :param duration: 单位是s
         :return:
         """
-        self.handle_control_check(control_name)
+        if self.handle_control_check(control_name) is False:
+            return False
         x, y = ensure_int(x, y)
         if duration is None:
             duration = 0.8
@@ -157,7 +166,8 @@ class Control(Minitouch, Adb, Scrcpy, Window):
         logger.info(f'{self._format_action_duration(elapsed)}Click {point2str(x, y)} @ {control_name} {duration}')
 
     def swipe(self, p1, p2, duration=(0.1, 0.2), control_name='SWIPE', distance_check=True):
-        self.handle_control_check(control_name)
+        if self.handle_control_check(control_name) is False:
+            return False
         p1, p2 = ensure_int(p1, p2)
         duration = ensure_time(duration)
         method = self.config.script.device.control_method
@@ -238,7 +248,8 @@ class Control(Minitouch, Adb, Scrcpy, Window):
 
     def drag(self, p1, p2, segments=1, shake=(0, 15), point_random=(-10, -10, 10, 10), shake_random=(-5, -5, 5, 5),
              swipe_duration=0.25, shake_duration=0.1, name='DRAG'):
-        self.handle_control_check(name)
+        if self.handle_control_check(name) is False:
+            return False
         p1, p2 = ensure_int(p1, p2)
         drag_log = 'Drag %s -> %s' % (point2str(*p1), point2str(*p2))
         method = self.config.script.emulator.control_method

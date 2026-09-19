@@ -543,6 +543,7 @@ class Script:
         RuleClick.reset_task_points()
         set_ocr_logging_enabled(self.config.global_game.ocr.save_ocr_log)
         try:
+            self.device.reset_task_recovery()
             self.device.screenshot()
             module_name = 'script_task'
             module_path = str(Path.cwd() / 'tasks' / command / (module_name + '.py'))
@@ -681,6 +682,13 @@ class Script:
         对致命异常 (ScriptError / RequestHumanTakeover / 未识别 Exception)
         在内部直接 exit(1)。
         """
+        if isinstance(e, TaskRecoveryFailed):
+            logger.error(e)
+            self.save_error_log()
+            self.config.task_delay(task=command, success=False)
+            self._set_task_runtime_outcome(task=command, status='esc_recovery_failed')
+            return False
+
         if isinstance(e, TaskEnd):
             self._capture_task_runtime_outcome(command)
             return True

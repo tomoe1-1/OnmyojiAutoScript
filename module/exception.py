@@ -60,3 +60,8 @@ class RequestHumanTakeover(Exception):
 
 class TaskEnd(Exception):
     pass
+
+
+class TaskRecoveryFailed(Exception):
+    """Fail the current task after bounded ESC recovery, without game restart."""
+    pass

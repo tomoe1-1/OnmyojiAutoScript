@@ -21,6 +21,7 @@ from module.device.screenshot import Screenshot
 from module.exception import (GameNotRunningError,
                               GameStuckError,
                               GameTooManyClickError,
+                              TaskRecoveryFailed,
                               RequestHumanTakeover,
                               EmulatorNotRunningError)
 from module.logger import logger
@@ -67,6 +68,7 @@ class Device(Platform, Screenshot, Control, AppControl):
         self.stuck_timer_long = Timer(300, count=300).start()
         self._login_deadline = None
         self._last_control_time = None
+        self.reset_task_recovery()
         self._screenshot_interval = Timer(0.1)
         self.screenshot_interval_set()
         self._image_batch_cache_frame_id: str | None = None
@@ -154,6 +156,7 @@ class Device(Platform, Screenshot, Control, AppControl):
             super().screenshot()
 
         self.reset_image_batch_cache(self.image_frame_id)
+        self._await_recovery_frame = False
         return self.image
 
     def release_during_wait(self):
@@ -193,7 +196,47 @@ class Device(Platform, Screenshot, Control, AppControl):
 
     def _check_login_deadline(self):
         if self._login_deadline is not None and time.monotonic() >= self._login_deadline:
-            raise GameStuckError('Low spec login exceeded 900 seconds')
+            self.recover_by_escape('Low spec login exceeded 900 seconds')
+            return True
+        return False
+
+    def reset_task_recovery(self):
+        self._escape_attempts = 0
+        self._escape_generation = 0
+        self._click_recovery_at = None
+        self._click_recovery_reason = ''
+        self._click_recovery_buttons = set()
+        self._await_recovery_frame = False
+
+    def recover_by_escape(self, reason):
+        if not self.app_is_running():
+            raise GameNotRunningError('Game died')
+        if self._escape_attempts >= 3:
+            raise TaskRecoveryFailed(f'ESC recovery failed after 3 attempts: {reason}')
+        self._escape_attempts += 1
+        logger.warning(f'ESC recovery {self._escape_attempts}/3: {reason}')
+        try:
+            self.press_escape()
+        except Exception as exc:
+            raise TaskRecoveryFailed(f'Unable to send ESC: {exc}') from exc
+        self.invalidate_image_batch_cache()
+        self._escape_generation += 1
+        self._await_recovery_frame = True
+        self._click_recovery_at = None
+        self._click_recovery_buttons.clear()
+        self.click_record_clear()
+        records = self.detect_record.copy()
+        if self._login_deadline is not None:
+            self._login_deadline = time.monotonic() + self.performance.timeout(300)
+        self.stuck_record_clear()
+        self.detect_record.update(records)
+
+    def _check_click_recovery(self):
+        if self._click_recovery_at is None:
+            return False
+        if time.monotonic() - self._click_recovery_at >= self.performance.timeout(60):
+            self.recover_by_escape(self._click_recovery_reason)
+        return True
 
     def stuck_record_clear(self):
         self.detect_record = {'LOGIN_CHECK'} if self._login_deadline is not None else set()
@@ -205,7 +248,8 @@ class Device(Platform, Screenshot, Control, AppControl):
         Raises:
             GameStuckError:
         """
-        self._check_login_deadline()
+        if self._check_login_deadline() or self._check_click_recovery():
+            return False
         # Login has its own total deadline; battle/other long waits stay at 300s.
         if self._login_deadline is not None:
             return False
@@ -221,23 +265,36 @@ class Device(Platform, Screenshot, Control, AppControl):
 
         logger.warning('Wait too long')
         logger.warning(f'Waiting for {self.detect_record}')
-        self.stuck_record_clear()
-
-        if self.app_is_running():
-            raise GameStuckError(f'Wait too long')
-        else:
-            raise GameNotRunningError('Game died')
+        self.recover_by_escape(f'Wait too long: {self.detect_record}')
+        return False
 
     def handle_control_check(self, button):
+        if self._await_recovery_frame or self._check_login_deadline():
+            return False
+        if self._check_click_recovery():
+            if self._await_recovery_frame or str(button) in self._click_recovery_buttons:
+                return False
+            self._click_recovery_at = None
+            self._click_recovery_buttons.clear()
         if self.performance.click_interval and self._last_control_time is not None:
             remaining = self.performance.click_interval - (time.monotonic() - self._last_control_time)
             if remaining > 0:
                 time.sleep(remaining)
-        self._check_login_deadline()
+        if self._check_login_deadline():
+            return False
         self._last_control_time = time.monotonic()
         self.stuck_record_clear()
         self.click_record_add(button)
-        self.click_record_check()
+        history = set(self.click_record)
+        try:
+            self.click_record_check()
+        except GameTooManyClickError as exc:
+            self._click_recovery_at = time.monotonic()
+            self._click_recovery_reason = str(exc)
+            self._click_recovery_buttons = history
+            logger.warning(f'Repeated clicks paused; wait {self.performance.timeout(60)}s before ESC')
+            return False
+        return True
 
     def click_record_add(self, button):
         self.click_record.append(str(button))
@@ -271,7 +328,6 @@ class Device(Platform, Screenshot, Control, AppControl):
         Raises:
             GameTooManyClickError:
         """
-        self._check_login_deadline()
         if not self.click_record:
             return
         count = {}
